@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using iCSharp.Kernel.ScriptEngine;
 using System.Web;
@@ -16,6 +18,16 @@ namespace iCSharp.Kernel.Shell
     using iCSharp.Messages;
     using NetMQ.Sockets;
 
+    public static class Extensions
+    {
+        public static bool IsBase64String(this string s)
+        {
+            s = s.Trim();
+            return (s.Length % 4 == 0) && Regex.IsMatch(s, @"^[a-zA-Z0-9\+/]*={0,3}$", RegexOptions.None);
+
+        }
+    }
+
     public class ExecuteRequestHandler : IShellMessageHandler
     {
         private readonly ILog logger;
@@ -25,6 +37,7 @@ namespace iCSharp.Kernel.Shell
 		private readonly IMessageSender messageSender;
 
 		private int executionCount = 1;
+
 
         public ExecuteRequestHandler(ILog logger, IReplEngine replEngine, IMessageSender messageSender)
         {
@@ -51,11 +64,13 @@ namespace iCSharp.Kernel.Shell
             ExecutionResult results = this.replEngine.Execute(code);
             string codeOutput = this.GetCodeOutput(results);
             string codeHtmlOutput = this.GetCodeHtmlOutput(results);
-            
+            var pngOutput = GetPngOutput(results);
+
             Dictionary<string, object> data = new Dictionary<string, object>()
             {
                 {"text/plain", codeOutput},
-                {"text/html", codeHtmlOutput}
+                {"text/html", codeHtmlOutput},
+                {"image/png", pngOutput }
             };
 
             DisplayData displayData = new DisplayData()
@@ -80,24 +95,37 @@ namespace iCSharp.Kernel.Shell
         {
             StringBuilder sb = new StringBuilder();
 
-            foreach (string result in executionResult.OutputResults)
+            foreach (string result in executionResult.OutputResults.Where(x => !x.IsBase64String()))
             {
                 sb.Append(result);
             }
 
-            return sb.ToString();
+            return sb.Length > 0 ? sb.ToString() : null;
         }
 
         private string GetCodeHtmlOutput(ExecutionResult executionResult)
         {
             StringBuilder sb = new StringBuilder();
-            foreach (Tuple<string, ConsoleColor> tuple in executionResult.OutputResultWithColorInformation)
+            foreach (Tuple<string, ConsoleColor> tuple in executionResult.OutputResultWithColorInformation.Where(x => !x.Item1.IsBase64String()))
             {
                 string encoded = HttpUtility.HtmlEncode(tuple.Item1);
                 sb.Append(string.Format("<font style=\"color:{0}\">{1}</font>", tuple.Item2.ToString(), encoded));
             }
 
-            return sb.ToString();
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+
+        private string GetPngOutput(ExecutionResult executionResult)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            foreach (string result in executionResult.OutputResults.Where(x => x.IsBase64String()))
+            {
+                sb.Append(result);
+            }
+
+            
+            return sb.Length > 0 ? sb.ToString() : null;
         }
 
         public void SendMessageToIOPub(Message message, PublisherSocket ioPub, string statusValue)
