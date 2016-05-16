@@ -1,0 +1,1 @@
+jupyter notebook --KernelManager.kernel_cmd="['c:\\dev\\libraries\\icsharp\\Kernel\\bin\\Release\\iCSharp.Kernel.exe', '{connection_file}']"  --ip=127.0.0.1  --MappingKernelManager.default_kernel_name='icsharp'
