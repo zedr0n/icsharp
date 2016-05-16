@@ -26,6 +26,13 @@ namespace iCSharp.Kernel.Shell
             return (s.Length % 4 == 0) && Regex.IsMatch(s, @"^[a-zA-Z0-9\+/]*={0,3}$", RegexOptions.None);
 
         }
+
+        public static bool IsHtmlString(this string s)
+        {
+            s = s.Trim();
+            var tagRegex = new Regex(@"<\s*([^ >]+)[^>]*>.*?<\s*/\s*\1\s*>");
+            return tagRegex.IsMatch(s);
+        }
     }
 
     public class ExecuteRequestHandler : IShellMessageHandler
@@ -95,7 +102,7 @@ namespace iCSharp.Kernel.Shell
         {
             StringBuilder sb = new StringBuilder();
 
-            foreach (string result in executionResult.OutputResults.Where(x => !x.IsBase64String()))
+            foreach (string result in executionResult.OutputResults.Where(x => !x.IsBase64String() && !x.IsHtmlString()))
             {
                 sb.Append(result);
             }
@@ -106,10 +113,19 @@ namespace iCSharp.Kernel.Shell
         private string GetCodeHtmlOutput(ExecutionResult executionResult)
         {
             StringBuilder sb = new StringBuilder();
-            foreach (Tuple<string, ConsoleColor> tuple in executionResult.OutputResultWithColorInformation.Where(x => !x.Item1.IsBase64String()))
+            foreach (Tuple<string, ConsoleColor> tuple in executionResult.OutputResultWithColorInformation.Where(x => !x.Item1.IsBase64String() && !x.Item1.IsHtmlString()))
             {
                 string encoded = HttpUtility.HtmlEncode(tuple.Item1);
                 sb.Append(string.Format("<font style=\"color:{0}\">{1}</font>", tuple.Item2.ToString(), encoded));
+            }
+
+            if (sb.Length > 0)
+                return sb.ToString();
+
+            // check if we have already html
+            foreach (string result in executionResult.OutputResults.Where(x => !x.IsBase64String() && x.IsHtmlString()))
+            {
+                sb.Append(result);
             }
 
             return sb.Length > 0 ? sb.ToString() : null;
